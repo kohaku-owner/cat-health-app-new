@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐱 猫の体調管理アプリ</title>
+  <style>
+    /* ========== リセット & ベース ========== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif;
+      background: #FFF8F2;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    /* ========== ヘッダー ========== */
+    header {
+      background: linear-gradient(135deg, #FF8C69, #FFB347);
+      color: white;
+      text-align: center;
+      padding: 20px 16px 16px;
+      box-shadow: 0 3px 10px rgba(255,140,105,0.3);
+    }
+    header h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    #cat-name-display { font-size: 0.95rem; opacity: 0.92; }
+
+    /* ========== タブナビゲーション ========== */
+    .tab-nav {
+      display: flex;
+      background: white;
+      border-bottom: 2px solid #FFD9B8;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 13px 4px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #AAA;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active { color: #FF8C69; border-bottom-color: #FF8C69; font-weight: bold; }
+    .tab-btn:hover:not(.active) { background: #FFF4EC; color: #FF8C69; }
+
+    /* ========== タブコンテンツ ========== */
+    .tab-content { display: none; padding: 20px 16px; max-width: 640px; margin: 0 auto; }
+    .tab-content.active { display: block; }
+
+    /* ========== カード ========== */
+    .card {
+      background: white;
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.07);
+    }
+    .card h2 {
+      font-size: 1rem;
+      margin-bottom: 18px;
+      color: #FF8C69;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ========== フォーム基本要素 ========== */
+    .form-group { margin-bottom: 20px; }
+
+    /* 通常のラベル（入力欄の上に出るもの） */
+    label.field-label {
+      display: block;
+      font-size: 0.82rem;
+      color: #777;
+      margin-bottom: 8px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    /* 条件ブロック内の小さいラベル */
+    label.sub-label {
+      display: block;
+      font-size: 0.78rem;
+      color: #AA8866;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    input[type="time"],
+    textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 2px solid #EEE;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background: #FAFAFA;
+    }
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    input[type="date"]:focus,
+    input[type="time"]:focus,
+    textarea:focus {
+      border-color: #FFB347;
+      box-shadow: 0 0 0 3px rgba(255,179,71,0.15);
+      background: white;
+    }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* ========== ピル型ラジオ・チェックボックス 共通 ========== */
+    /* 実際のinputは非表示にして、labelをボタン風に見せる */
+    .toggle-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    /* 縦並びにしたい場合（うんちの状態など） */
+    .toggle-group.toggle-vertical {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .toggle-item,
+    .check-item {
+      position: relative;
+    }
+
+    /* ラジオ・チェック本体は見えなくする */
+    .toggle-item input[type="radio"],
+    .check-item input[type="checkbox"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+    }
+
+    /* ピル型ラベルのデフォルト状態 */
+    .toggle-item label,
+    .check-item label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 16px;
+      border: 2px solid #E8E8E8;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #999;
+      background: #F8F8F8;
+      transition: all 0.18s ease;
+      user-select: none;
+      white-space: nowrap;
+      /* 親のlabel設定を上書き */
+      margin-bottom: 0;
+      letter-spacing: 0;
+    }
+
+    /* 選択されたピルのスタイル（ラジオ・チェック共通） */
+    .toggle-item input:checked + label,
+    .check-item input:checked + label {
+      border-color: #FF8C69;
+      background: linear-gradient(135deg, #FFF0EB, #FFF6F0);
+      color: #E05E30;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(255,140,105,0.22);
+    }
+
+    /* ホバー時 */
+    .toggle-item label:hover,
+    .check-item label:hover {
+      border-color: #FFB347;
+      background: #FFF8F2;
+      color: #FF8C69;
+    }
+
+    /* 縦並びの場合はラベルを横幅いっぱいに広げる */
+    .toggle-vertical .toggle-item label {
+      width: 100%;
+      border-radius: 12px;
+      padding: 10px 18px;
+      font-size: 0.9rem;
+    }
+
+    /* ========== 連動表示ブロック（スライドアニメーション） ========== */
+    /* max-height と opacity でなめらかに表示/非表示を切り替える */
+    .conditional-block {
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      /* max-height は十分大きな値まで広げる。コンテンツより大きければOK */
+      transition: max-height 0.35s ease, opacity 0.25s ease, margin-top 0.3s ease;
+      margin-top: 0;
+    }
+    /* .visible クラスが付いたら展開する */
+    .conditional-block.visible {
+      max-height: 500px;
+      opacity: 1;
+      margin-top: 10px;
+    }
+
+    /* 条件ブロックの内側のスタイル（インデント・ボーダーで「子要素」を示す） */
+    .conditional-inner {
+      background: #FFFBF6;
+      border: 1.5px solid #FFD9B8;
+      border-left: 4px solid #FFB347;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    /* ========== ボタン ========== */
+    .btn {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: bold;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #FF8C69, #FFB347);
+      color: white;
+      width: 100%;
+      font-size: 1rem;
+      padding: 14px;
+      box-shadow: 0 3px 10px rgba(255,140,105,0.3);
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-danger {
+      background: #FFF0F0;
+      color: #E05555;
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      border-radius: 8px;
+    }
+    .btn-danger:hover { background: #E05555; color: white; }
+
+    /* ========== 写真アップロード ========== */
+    .photo-upload-area {
+      border: 2px dashed #FFB347;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #FFFAF5;
+    }
+    .photo-upload-area:hover { background: #FFF4EC; border-color: #FF8C69; }
+    .photo-placeholder { color: #CCC; font-size: 0.9rem; }
+    .photo-placeholder span { font-size: 2rem; display: block; margin-bottom: 6px; }
+    #photo-preview { max-width: 100%; max-height: 220px; border-radius: 10px; display: none; }
+    #photo-input { display: none; }
+    #photo-clear-btn { margin-top: 10px; display: none; }
+
+    /* ========== 記録カード（一覧） ========== */
+    .record-item {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      border-left: 5px solid #FFB347;
+    }
+    .record-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .record-date { font-size: 0.88rem; color: #888; font-weight: 600; }
+    .record-fields { display: flex; flex-direction: column; gap: 7px; }
+    .record-field { display: flex; gap: 10px; font-size: 0.88rem; line-height: 1.5; }
+    .record-field-label { color: #FF9966; font-weight: bold; min-width: 60px; flex-shrink: 0; }
+    .record-field-value { color: #444; word-break: break-word; }
+    .record-photo {
+      max-width: 100%; max-height: 180px;
+      border-radius: 10px; margin-top: 10px; display: block;
+    }
+    /* うんちの状態に応じた色分け */
+    .poop-good  { color: #22A066; font-weight: bold; }
+    .poop-soft  { color: #2288CC; font-weight: bold; }
+    .poop-hard  { color: #AA6622; font-weight: bold; }
+
+    /* ========== 空状態 ========== */
+    .empty-state { text-align: center; padding: 50px 20px; color: #BBB; }
+    .empty-state .icon { font-size: 3.5rem; margin-bottom: 14px; }
+    .empty-state p { margin-bottom: 6px; }
+    .empty-state .hint { font-size: 0.82rem; color: #CCC; }
+
+    /* ========== トースト通知 ========== */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: rgba(40,40,40,0.92);
+      color: white;
+      padding: 12px 22px;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      transition: transform 0.3s ease;
+      z-index: 999;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ========== プロフィール情報 ========== */
+    .profile-info-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid #F5F5F5;
+      font-size: 0.9rem;
+    }
+    .profile-info-row:last-child { border-bottom: none; }
+    .profile-info-label { color: #FF9966; font-weight: bold; min-width: 72px; }
+
+    /* ========== 統計バッジ ========== */
+    .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+    .stat-badge {
+      background: #FFF4EC; border-radius: 10px;
+      padding: 10px 16px; text-align: center; flex: 1; min-width: 80px;
+    }
+    .stat-badge .stat-num { font-size: 1.4rem; font-weight: bold; color: #FF8C69; }
+    .stat-badge .stat-label { font-size: 0.72rem; color: #AAA; margin-top: 2px; }
+
+    /* ========== セクション区切り線 ========== */
+    .form-divider {
+      border: none;
+      border-top: 1.5px dashed #F0E0D0;
+      margin: 20px 0;
+    }
+
+    /* ========== 検索・フィルターエリア ========== */
+    .search-filter-area {
+      background: white;
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    /* 絞り込みプルダウン */
+    .filter-select {
+      flex: 1;
+      min-width: 148px;
+      padding: 9px 32px 9px 12px; /* 右側に矢印アイコン分のスペース */
+      border: 2px solid #EEE;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-family: inherit;
+      color: #555;
+      background-color: #FAFAFA;
+      /* ブラウザ標準の矢印を隠してオリジナル矢印を表示 */
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%23FFB347' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .filter-select:focus {
+      border-color: #FFB347;
+      box-shadow: 0 0 0 3px rgba(255,179,71,0.15);
+    }
+
+    /* キーワード検索テキストボックス（虫眼鏡アイコン付き） */
+    .search-input-wrap {
+      flex: 1;
+      min-width: 140px;
+      position: relative;
+    }
+    .search-input-wrap::before {
+      /* 虫眼鏡アイコンを疑似要素で描く */
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 14px;
+      height: 14px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23CCC' stroke-width='2.5' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat center / contain;
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%;
+      padding: 9px 12px 9px 32px; /* 左側に虫眼鏡分のスペース */
+      border: 2px solid #EEE;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-family: inherit;
+      color: #555;
+      background: #FAFAFA;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-input:focus {
+      border-color: #FFB347;
+      box-shadow: 0 0 0 3px rgba(255,179,71,0.15);
+      background-color: white;
+    }
+    /* 入力中はプレースホルダーを少し薄く */
+    .search-input::placeholder { color: #CCC; }
+
+    /* フィルター結果の件数表示（エリア下部に右寄せ表示） */
+    .filter-result-info {
+      width: 100%;
+      font-size: 0.75rem;
+      color: #CCC;
+      text-align: right;
+      padding-top: 2px;
+      /* まだ何もない時は非表示 */
+      min-height: 1em;
+    }
+    /* 絞り込み中はオレンジ色で強調 */
+    .filter-result-info.has-filter {
+      color: #FF8C69;
+      font-weight: 600;
+    }
+  </style>
+
+  <!-- ========== Supabase SDK（CDN経由で読み込む） ==========
+       ※ インターネット接続が必要です
+       ※ supabase-js v2 系を使用
+  ========================================================= -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- ===== ヘッダー ===== -->
+<header>
+  <h1>🐱 猫の体調管理</h1>
+  <div id="cat-name-display">プロフィールを設定してください</div>
+</header>
+
+<!-- ===== タブナビ ===== -->
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="showTab('profile', this)">🐱 プロフィール</button>
+  <button class="tab-btn"        onclick="showTab('add',     this)">✏️ 記録追加</button>
+  <button class="tab-btn"        onclick="showTab('list',    this)">📋 一覧</button>
+</nav>
+
+<!-- ===========================
+     タブ①：プロフィール
+=========================== -->
+<div id="tab-profile" class="tab-content active">
+
+  <div class="card">
+    <h2>🐾 猫の情報を登録</h2>
+    <div class="form-group">
+      <label class="field-label">猫の名前（必須）</label>
+      <input type="text" id="cat-name" placeholder="例：ミケ" maxlength="20">
+    </div>
+    <div class="form-group">
+      <label class="field-label">誕生日（任意）</label>
+      <input type="date" id="cat-birthday">
+    </div>
+    <button class="btn btn-primary" onclick="saveProfile()">💾 保存する</button>
+  </div>
+
+  <!-- 保存後に表示される登録内容カード -->
+  <div class="card" id="profile-result" style="display:none">
+    <h2>📋 登録内容</h2>
+    <div id="profile-result-body"></div>
+  </div>
+
+  <!-- 記録の統計カード -->
+  <div class="card" id="stats-card" style="display:none">
+    <h2>📊 記録の統計</h2>
+    <div class="stats-row" id="stats-row"></div>
+  </div>
+
+</div>
+
+<!-- ===========================
+     タブ②：記録追加
+=========================== -->
+<div id="tab-add" class="tab-content">
+  <div class="card">
+    <h2>✏️ 記録を追加する</h2>
+
+    <!-- 日付（必須） -->
+    <div class="form-group">
+      <label class="field-label">📅 日付（必須）</label>
+      <input type="date" id="record-date">
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ======== 元気度（ラジオボタン） ======== -->
+    <div class="form-group">
+      <label class="field-label">😊 今日の元気度</label>
+      <div class="toggle-group">
+        <div class="toggle-item">
+          <input type="radio" name="vitality" id="vitality-great"
+                 value="😊 元気いっぱい" onchange="onVitalityChange()">
+          <label for="vitality-great">😊 元気いっぱい</label>
+        </div>
+        <div class="toggle-item">
+          <input type="radio" name="vitality" id="vitality-normal"
+                 value="😐 いつも通り" onchange="onVitalityChange()">
+          <label for="vitality-normal">😐 いつも通り</label>
+        </div>
+        <div class="toggle-item">
+          <input type="radio" name="vitality" id="vitality-bad"
+                 value="😰 元気がない" onchange="onVitalityChange()">
+          <label for="vitality-bad">😰 元気がない</label>
+        </div>
+      </div>
+
+      <!-- 連動：「😰 元気がない」選択時だけ表示 -->
+      <div class="conditional-block" id="vitality-time-block">
+        <div class="conditional-inner">
+          <label class="sub-label">🕐 いつ頃から？（任意）</label>
+          <input type="text" id="vitality-time"
+                 placeholder="例：今朝から、昨日の夜から など">
+        </div>
+      </div>
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ======== 気になる症状（チェックボックス） ======== -->
+    <div class="form-group">
+      <label class="field-label">⚠️ 気になる症状（複数選択OK）</label>
+      <div class="toggle-group" style="gap: 8px 6px;">
+        <div class="check-item">
+          <input type="checkbox" id="sym-appetite" value="食欲がない"
+                 onchange="onSymptomChange()">
+          <label for="sym-appetite">🍽️ 食欲がない</label>
+        </div>
+        <div class="check-item">
+          <input type="checkbox" id="sym-vomit" value="嘔吐した"
+                 onchange="onSymptomChange()">
+          <label for="sym-vomit">🤢 嘔吐した</label>
+        </div>
+        <div class="check-item">
+          <input type="checkbox" id="sym-water" value="飲水量の変化"
+                 onchange="onSymptomChange()">
+          <label for="sym-water">💧 飲水量の変化</label>
+        </div>
+        <div class="check-item">
+          <input type="checkbox" id="sym-sneeze" value="くしゃみ・鼻水"
+                 onchange="onSymptomChange()">
+          <label for="sym-sneeze">🤧 くしゃみ・鼻水</label>
+        </div>
+        <div class="check-item">
+          <input type="checkbox" id="sym-other" value="その他"
+                 onchange="onSymptomChange()">
+          <label for="sym-other">📝 その他</label>
+        </div>
+      </div>
+
+      <!-- 連動：「その他」チェック時だけ自由記述欄を表示 -->
+      <div class="conditional-block" id="symptom-other-block">
+        <div class="conditional-inner">
+          <label class="sub-label">✏️ その他の症状（詳しく記入してください）</label>
+          <input type="text" id="symptom-other-text"
+                 placeholder="例：目やにが多い、毛並みが悪い など">
+        </div>
+      </div>
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ======== うんちの有無（ラジオボタン） ======== -->
+    <div class="form-group">
+      <label class="field-label">💩 うんちの有無</label>
+      <div class="toggle-group">
+        <div class="toggle-item">
+          <input type="radio" name="poop" id="poop-yes"
+                 value="あり" onchange="onPoopChange()">
+          <label for="poop-yes">💩 あり</label>
+        </div>
+        <div class="toggle-item">
+          <input type="radio" name="poop" id="poop-no"
+                 value="なし" onchange="onPoopChange()">
+          <label for="poop-no">✕ なし</label>
+        </div>
+      </div>
+
+      <!-- 連動：「あり」選択時だけ状態選択を表示 -->
+      <div class="conditional-block" id="poop-condition-block">
+        <div class="conditional-inner">
+          <label class="sub-label">💬 うんちの状態を選んでください</label>
+          <div class="toggle-group toggle-vertical">
+            <div class="toggle-item">
+              <input type="radio" name="poop-condition" id="poop-good"
+                     value="✨ 良好（ちょうどいい硬さ）">
+              <label for="poop-good">✨ 良好（ちょうどいい硬さ）</label>
+            </div>
+            <div class="toggle-item">
+              <input type="radio" name="poop-condition" id="poop-soft"
+                     value="💧 軟便・下痢（ゆるめ）">
+              <label for="poop-soft">💧 軟便・下痢（ゆるめ）</label>
+            </div>
+            <div class="toggle-item">
+              <input type="radio" name="poop-condition" id="poop-hard"
+                     value="🪨 コロコロ・硬い（便秘ぎみ）">
+              <label for="poop-hard">🪨 コロコロ・硬い（便秘ぎみ）</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ======== 体重・食事 ======== -->
+    <div class="form-group">
+      <label class="field-label">⚖️ 体重（kg）</label>
+      <input type="number" id="record-weight"
+             placeholder="例：4.2" step="0.01" min="0" max="30">
+    </div>
+
+    <div class="form-group">
+      <label class="field-label">🍽️ 食事内容</label>
+      <input type="text" id="record-meal"
+             placeholder="例：チキン缶（朝）、ドライフード（夜）" maxlength="200">
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ======== 写真・メモ ======== -->
+    <div class="form-group">
+      <label class="field-label">📷 写真</label>
+      <div class="photo-upload-area" onclick="document.getElementById('photo-input').click()">
+        <div id="photo-placeholder" class="photo-placeholder">
+          <span>📷</span>タップして写真を選ぶ
+        </div>
+        <img id="photo-preview" alt="プレビュー">
+      </div>
+      <input type="file" id="photo-input" accept="image/*" onchange="handlePhoto(event)">
+      <button id="photo-clear-btn" class="btn btn-danger" onclick="clearPhoto()">
+        ✕ 写真を削除
+      </button>
+    </div>
+
+    <div class="form-group">
+      <label class="field-label">📝 メモ</label>
+      <textarea id="record-memo"
+                placeholder="今日の様子、気になること、病院のこと など..."></textarea>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveRecord()">💾 記録を保存する</button>
+  </div>
+</div>
+
+<!-- ===========================
+     タブ③：一覧
+=========================== -->
+<div id="tab-list" class="tab-content">
+
+  <!-- ===== 検索・フィルターエリア ===== -->
+  <div class="search-filter-area">
+
+    <!-- ① 条件で絞り込むプルダウン -->
+    <select class="filter-select" id="filter-select" onchange="applyFilters()">
+      <option value="all">📋 すべての履歴</option>
+      <option value="vitality-bad">😰 元気がない日</option>
+      <option value="poop-soft">💩 軟便・下痢の日</option>
+      <option value="other-symptom">📝 その他の症状がある日</option>
+    </select>
+
+    <!-- ② キーワード検索テキストボックス -->
+    <div class="search-input-wrap">
+      <input
+        type="text"
+        class="search-input"
+        id="search-input"
+        placeholder="キーワードを入力..."
+        oninput="applyFilters()"
+        autocomplete="off"
+      >
+    </div>
+
+    <!-- 絞り込み結果の件数（「10件中 3件 表示中」など） -->
+    <div class="filter-result-info" id="filter-result-info"></div>
+
+  </div>
+  <!-- ===== 記録カードの表示エリア ===== -->
+  <div id="record-list-container"></div>
+
+</div>
+
+<!-- ===== トースト通知 ===== -->
+<div class="toast" id="toast"></div>
+
+
+<script>
+/* ==================================================
+   ▼▼▼ ★ここを書き換えてください★ ▼▼▼
+   Supabase ダッシュボードから取得した2つの値を
+   下の「★」の部分にそれぞれ貼り付けてください
+   （取得手順は下の「セットアップ手順」を参照）
+================================================== */
+const SUPABASE_URL      = 'https://nlvtzikwlistyysjfbav.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sdnR6aWt3bGlzdHl5c2pmYmF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MDE1NTEsImV4cCI6MjA5NTM3NzU1MX0.nu0YbaknCcnpL9a4JU22pcT9ufEMfRc7CI3ublHpLsQ';
+/* ▲▲▲ 設定ここまで ▲▲▲ */
+
+/* --------------------------------------------------
+   Supabase クライアントを初期化する
+   （ページ読み込み時に一度だけ実行される）
+-------------------------------------------------- */
+const { createClient } = supabase;   // CDN から読み込んだ supabase オブジェクトを展開
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* テーブル名（Supabase で作成するテーブル名と必ず一致させること） */
+const PROFILE_TABLE = 'cat_profile';     // プロフィール保存先テーブル
+const RECORDS_TABLE = 'cat_health_logs'; // 日々の記録保存先テーブル
+
+/* ==================================================
+   フィールド名の変換ユーティリティ
+   JavaScript → キャメルケース（例: vitalityTime）
+   Supabase DB → スネークケース（例: vitality_time）
+   保存・取得のたびにこの関数で変換する
+================================================== */
+/* JS オブジェクト → DB 行 形式に変換（INSERT 時に使用） */
+function toDbRow(r) {
+  const row = { date: r.date };
+  if (r.weight != null)        row.weight         = r.weight;
+  if (r.meal)                  row.meal           = r.meal;
+  if (r.vitality)              row.vitality       = r.vitality;
+  if (r.vitalityTime)          row.vitality_time  = r.vitalityTime;
+  if (r.poop)                  row.poop           = r.poop;
+  if (r.poopCondition)         row.poop_condition = r.poopCondition;
+  if (r.symptoms?.length > 0)  row.symptoms       = r.symptoms;  // JSONB 配列
+  if (r.photo)                 row.photo          = r.photo;
+  if (r.memo)                  row.memo           = r.memo;
+  return row;
+}
+
+/* DB 行 → JS オブジェクト 形式に変換（SELECT 後に使用） */
+function fromDbRow(row) {
+  return {
+    id:            row.id,
+    date:          row.date,
+    weight:        row.weight          ?? null,
+    meal:          row.meal            ?? null,
+    vitality:      row.vitality        ?? null,
+    vitalityTime:  row.vitality_time   ?? null,
+    poop:          row.poop            ?? null,
+    poopCondition: row.poop_condition  ?? null,
+    symptoms:      Array.isArray(row.symptoms) ? row.symptoms : null,
+    photo:         row.photo           ?? null,
+    memo:          row.memo            ?? null,
+  };
+}
+
+/* ==================================================
+   プロフィール：Supabase に保存する
+   async/await = 「処理が終わるまで待つ」仕組み
+================================================== */
+async function saveProfile() {
+  const name     = document.getElementById('cat-name').value.trim();
+  const birthday = document.getElementById('cat-birthday').value;
+
+  if (!name) { showToast('❌ 猫の名前を入力してください'); return; }
+
+  try {
+    // upsert = id='main' があれば UPDATE、なければ INSERT
+    const { error } = await sb
+      .from(PROFILE_TABLE)
+      .upsert({ id: 'main', name, birthday: birthday || null }, { onConflict: 'id' });
+
+    if (error) throw error;
+
+    // ローカルにもキャッシュ保存（次回ページ読み込みを速くするため）
+    localStorage.setItem('catProfile_cache', JSON.stringify({ name, birthday }));
+    updateHeader(name);
+    renderProfileResult({ name, birthday });
+    await refreshStats();
+    showToast('✅ プロフィールを保存しました！');
+  } catch (err) {
+    console.error('プロフィール保存エラー:', err);
+    showToast('❌ 保存に失敗しました。Supabase設定を確認してください');
+  }
+}
+
+/* ヘッダーに猫の名前を表示する */
+function updateHeader(name) {
+  document.getElementById('cat-name-display').textContent =
+    name ? `${name} の記録` : 'プロフィールを設定してください';
+}
+
+/* プロフィールの登録内容カードを描画する */
+function renderProfileResult({ name, birthday }) {
+  const card = document.getElementById('profile-result');
+  const body = document.getElementById('profile-result-body');
+
+  let ageText = '未設定';
+  if (birthday) {
+    const b = new Date(birthday);
+    const n = new Date();
+    let y = n.getFullYear() - b.getFullYear();
+    let m = n.getMonth()   - b.getMonth();
+    if (m < 0) { y--; m += 12; }
+    ageText = `${y}歳 ${m}ヶ月（${formatDateSimple(birthday)} 生まれ）`;
+  }
+
+  body.innerHTML = `
+    <div class="profile-info-row">
+      <span class="profile-info-label">🐱 名前</span>
+      <span>${escHtml(name)}</span>
+    </div>
+    <div class="profile-info-row">
+      <span class="profile-info-label">🎂 年齢</span>
+      <span>${ageText}</span>
+    </div>
+  `;
+  card.style.display = 'block';
+}
+
+/* プロフィールを Supabase から読み込んでフォームに反映する */
+async function loadProfileFromSupabase() {
+  // ① まずローカルキャッシュで即座に表示（画面表示を速くするため）
+  const cached = localStorage.getItem('catProfile_cache');
+  if (cached) {
+    try {
+      const p = JSON.parse(cached);
+      document.getElementById('cat-name').value     = p.name     || '';
+      document.getElementById('cat-birthday').value = p.birthday || '';
+      updateHeader(p.name || '');
+      if (p.name) renderProfileResult(p);
+    } catch {}
+  }
+
+  // ② Supabase から最新データを取得して画面を更新
+  try {
+    const { data, error } = await sb
+      .from(PROFILE_TABLE)
+      .select('*')
+      .eq('id', 'main')
+      .maybeSingle(); // 0件でもエラーにしない
+
+    if (error) throw error;
+
+    if (data) {
+      const p = { name: data.name || '', birthday: data.birthday || '' };
+      document.getElementById('cat-name').value     = p.name;
+      document.getElementById('cat-birthday').value = p.birthday;
+      localStorage.setItem('catProfile_cache', JSON.stringify(p));
+      updateHeader(p.name);
+      if (p.name) renderProfileResult(p);
+    }
+  } catch (err) {
+    console.error('プロフィール読み込みエラー:', err);
+    // オフライン時やエラー時はキャッシュ表示のまま継続
+  }
+
+  await refreshStats();
+}
+
+/* 統計バッジを Supabase のデータをもとに更新する */
+async function refreshStats() {
+  const card = document.getElementById('stats-card');
+  const row  = document.getElementById('stats-row');
+
+  try {
+    // 統計に必要なカラムだけ取得（通信量を減らすため）
+    const { data, error } = await sb
+      .from(RECORDS_TABLE)
+      .select('weight, photo, date')
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    if (!data || data.length === 0) { card.style.display = 'none'; return; }
+
+    // すでに日付降順なので weight がある先頭が最新体重
+    const withWeight   = data.filter(r => r.weight != null);
+    const latestWeight = withWeight.length > 0
+      ? withWeight[0].weight + ' kg'
+      : 'なし';
+
+    row.innerHTML = `
+      <div class="stat-badge">
+        <div class="stat-num">${data.length}</div>
+        <div class="stat-label">記録数</div>
+      </div>
+      <div class="stat-badge">
+        <div class="stat-num">${latestWeight}</div>
+        <div class="stat-label">最新体重</div>
+      </div>
+      <div class="stat-badge">
+        <div class="stat-num">${data.filter(r => r.photo).length}</div>
+        <div class="stat-label">写真あり</div>
+      </div>
+    `;
+    card.style.display = 'block';
+  } catch (err) {
+    console.error('統計取得エラー:', err);
+  }
+}
+
+/* ==================================================
+   連動機能①：元気度ラジオボタンが変わったとき
+   「😰 元気がない」のときだけ時間帯入力欄を表示する
+================================================== */
+function onVitalityChange() {
+  const selected = document.querySelector('input[name="vitality"]:checked');
+  const block    = document.getElementById('vitality-time-block');
+  if (selected && selected.value === '😰 元気がない') {
+    block.classList.add('visible');
+  } else {
+    block.classList.remove('visible');
+    document.getElementById('vitality-time').value = '';
+  }
+}
+
+/* ==================================================
+   連動機能②：うんちの有無ラジオボタンが変わったとき
+   「あり」のときだけ状態選択を表示する
+================================================== */
+function onPoopChange() {
+  const selected = document.querySelector('input[name="poop"]:checked');
+  const block    = document.getElementById('poop-condition-block');
+  if (selected && selected.value === 'あり') {
+    block.classList.add('visible');
+  } else {
+    block.classList.remove('visible');
+    document.querySelectorAll('input[name="poop-condition"]').forEach(r => r.checked = false);
+  }
+}
+
+/* ==================================================
+   連動機能③：症状チェックボックスが変わったとき
+   「その他」にチェックが入ったときだけ自由記述欄を表示する
+================================================== */
+function onSymptomChange() {
+  const otherChecked = document.getElementById('sym-other').checked;
+  const block        = document.getElementById('symptom-other-block');
+  if (otherChecked) {
+    block.classList.add('visible');
+  } else {
+    block.classList.remove('visible');
+    document.getElementById('symptom-other-text').value = '';
+  }
+}
+
+/* ==================================================
+   写真処理：選択・プレビュー表示
+================================================== */
+let currentPhoto = null; // 現在選択中の写真（Base64文字列）
+
+function handlePhoto(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  // 写真が大きすぎると Supabase への保存・転送が重くなるため警告
+  if (file.size > 700 * 1024) {
+    showToast('⚠️ 写真が大きいです（700KB超）。小さい写真を選んでください');
+  }
+
+  // FileReader で画像を Base64 文字列に変換してプレビューへ
+  const reader = new FileReader();
+  reader.onload = ev => {
+    currentPhoto = ev.target.result;
+    document.getElementById('photo-preview').src = currentPhoto;
+    document.getElementById('photo-preview').style.display     = 'block';
+    document.getElementById('photo-placeholder').style.display = 'none';
+    document.getElementById('photo-clear-btn').style.display   = 'inline-block';
+  };
+  reader.readAsDataURL(file);
+}
+
+/* 写真の選択をクリアする */
+function clearPhoto() {
+  currentPhoto = null;
+  document.getElementById('photo-preview').style.display     = 'none';
+  document.getElementById('photo-placeholder').style.display = 'block';
+  document.getElementById('photo-clear-btn').style.display   = 'none';
+  document.getElementById('photo-input').value = '';
+}
+
+/* ==================================================
+   記録の保存（Supabase に INSERT する）
+================================================== */
+async function saveRecord() {
+  const date   = document.getElementById('record-date').value;
+  const weight = document.getElementById('record-weight').value;
+  const meal   = document.getElementById('record-meal').value.trim();
+  const memo   = document.getElementById('record-memo').value.trim();
+
+  // --- 元気度 ---
+  const vitalityEl   = document.querySelector('input[name="vitality"]:checked');
+  const vitality     = vitalityEl ? vitalityEl.value : null;
+  // 「元気がない」のときだけ時間帯を取得、それ以外は null
+  const vitalityTime = (vitality === '😰 元気がない')
+    ? (document.getElementById('vitality-time').value.trim() || null) : null;
+
+  // --- うんち ---
+  const poopEl        = document.querySelector('input[name="poop"]:checked');
+  const poop          = poopEl ? poopEl.value : null;
+  const poopCondEl    = document.querySelector('input[name="poop-condition"]:checked');
+  // 「あり」のときだけ状態を取得
+  const poopCondition = (poop === 'あり' && poopCondEl) ? poopCondEl.value : null;
+
+  // --- 気になる症状（チェックボックス複数選択） ---
+  const symptoms = [];
+  document.querySelectorAll('.check-item input[type="checkbox"]:checked').forEach(cb => {
+    if (cb.value !== 'その他') symptoms.push(cb.value);
+  });
+  // 「その他」のチェックが入っていれば自由記述テキストも追加
+  const otherText = document.getElementById('sym-other').checked
+    ? (document.getElementById('symptom-other-text').value.trim() || null) : null;
+  if (otherText) symptoms.push(`その他：${otherText}`);
+
+  // 日付は必須
+  if (!date) { showToast('❌ 日付を選択してください'); return; }
+
+  // 写真のサイズチェック（大きすぎると保存・転送が重くなる）
+  if (currentPhoto && currentPhoto.length > 950000) {
+    showToast('⚠️ 写真が大きすぎます。700KB以下の写真を選んでください');
+    return;
+  }
+
+  // JS 形式でオブジェクトを組み立てて、toDbRow() で DB 形式に変換してから保存
+  const record = {
+    date,
+    weight:        weight !== '' ? parseFloat(weight) : null,
+    meal:          meal          || null,
+    vitality:      vitality      || null,
+    vitalityTime:  vitalityTime,
+    poop:          poop          || null,
+    poopCondition: poopCondition,
+    symptoms:      symptoms.length > 0 ? symptoms : null,
+    photo:         currentPhoto  || null,
+    memo:          memo          || null,
+  };
+  // created_at は Supabase が DB 側で自動的に現在時刻を入れる（SQL の DEFAULT NOW()）
+
+  try {
+    showToast('⏳ 保存中...');
+    // toDbRow() でフィールド名をスネークケースに変換して INSERT
+    const { error } = await sb.from(RECORDS_TABLE).insert(toDbRow(record));
+    if (error) throw error;
+
+    resetForm();
+    await refreshStats();
+    showToast('✅ 記録を保存しました！');
+    // 一覧タブが開いていれば再描画
+    if (document.getElementById('tab-list').classList.contains('active')) {
+      renderRecordList();
+    }
+  } catch (err) {
+    console.error('記録保存エラー:', err);
+    showToast('❌ 保存に失敗しました。通信状態を確認してください');
+  }
+}
+
+/* ==================================================
+   フォームのリセット（保存後に全入力欄を初期状態に戻す）
+================================================== */
+function resetForm() {
+  document.getElementById('record-weight').value = '';
+  document.getElementById('record-meal').value   = '';
+  document.getElementById('record-memo').value   = '';
+  // 元気度リセット
+  document.querySelectorAll('input[name="vitality"]').forEach(r => r.checked = false);
+  document.getElementById('vitality-time-block').classList.remove('visible');
+  document.getElementById('vitality-time').value = '';
+  // うんちリセット
+  document.querySelectorAll('input[name="poop"]').forEach(r => r.checked = false);
+  document.getElementById('poop-condition-block').classList.remove('visible');
+  document.querySelectorAll('input[name="poop-condition"]').forEach(r => r.checked = false);
+  // 症状リセット
+  document.querySelectorAll('.check-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+  document.getElementById('symptom-other-block').classList.remove('visible');
+  document.getElementById('symptom-other-text').value = '';
+  clearPhoto();
+}
+
+/* ==================================================
+   全記録のキャッシュ（Supabase から取得後ここに保存する）
+   絞り込み・検索はこのキャッシュに対して行うため、
+   フィルター操作のたびに Supabase へ通信しなくて済む
+================================================== */
+let allRecords = [];
+
+/* ==================================================
+   記録一覧の表示（Supabase からデータを取得してキャッシュ→描画）
+================================================== */
+async function renderRecordList() {
+  const container = document.getElementById('record-list-container');
+  // 読み込み中メッセージを表示
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:#CCC">⏳ 読み込み中...</div>';
+
+  try {
+    // 日付の新しい順に Supabase から全記録を取得
+    const { data, error } = await sb
+      .from(RECORDS_TABLE)
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+
+    // 取得データを JS 形式に変換してキャッシュに保存（絞り込み・検索で繰り返し使う）
+    allRecords = (data || []).map(fromDbRow);
+
+    // 現在のフィルター・検索条件を適用して描画
+    applyFilters();
+
+  } catch (err) {
+    console.error('記録取得エラー:', err);
+    container.innerHTML = `
+      <div style="text-align:center;padding:30px;color:#E05555">
+        ❌ データの取得に失敗しました<br>
+        <span style="font-size:0.8rem;color:#AAA">通信状態または Supabase 設定を確認してください</span>
+      </div>`;
+  }
+}
+
+/* ==================================================
+   絞り込み・検索を適用して表示を更新する
+   ・プルダウン（filter-select）の条件
+   ・キーワード（search-input）の文字
+   の両方を掛け合わせて絞り込む
+================================================== */
+function applyFilters() {
+  // 現在のフィルター値とキーワードを取得
+  const filterVal = document.getElementById('filter-select')?.value  || 'all';
+  const keyword   = (document.getElementById('search-input')?.value  || '').trim().toLowerCase();
+
+  // キャッシュ全件から絞り込みをスタート
+  let filtered = allRecords;
+
+  // ① プルダウンのフィルター条件を適用
+  if (filterVal === 'vitality-bad') {
+    // 「😰 元気がない」が選択されている記録だけ残す
+    filtered = filtered.filter(r => r.vitality === '😰 元気がない');
+
+  } else if (filterVal === 'poop-soft') {
+    // うんちの状態が「軟便」を含む記録だけ残す
+    filtered = filtered.filter(r =>
+      r.poopCondition && r.poopCondition.includes('軟便')
+    );
+
+  } else if (filterVal === 'other-symptom') {
+    // 症状に「その他：」で始まるものが含まれる記録だけ残す
+    filtered = filtered.filter(r =>
+      Array.isArray(r.symptoms) && r.symptoms.some(s => s.startsWith('その他：'))
+    );
+  }
+  // filterVal === 'all' のときは絞り込まない（全件表示）
+
+  // ② キーワード検索をさらに掛け合わせる（スペース区切りでAND検索）
+  if (keyword) {
+    // 半角スペースで区切って複数キーワードに対応
+    const words = keyword.split(/\s+/).filter(w => w.length > 0);
+
+    filtered = filtered.filter(r => {
+      // 各レコードの全フィールドをまとめて1つの文字列にする（検索対象）
+      const haystack = [
+        r.date          || '',
+        r.meal          || '',
+        r.vitality      || '',
+        r.vitalityTime  || '',
+        r.poop          || '',
+        r.poopCondition || '',
+        r.memo          || '',
+        ...(Array.isArray(r.symptoms) ? r.symptoms : [])
+      ].join(' ').toLowerCase();
+
+      // すべてのキーワードが含まれていれば合格（AND検索）
+      return words.every(w => haystack.includes(w));
+    });
+  }
+
+  // ③ 件数インジケーターを更新
+  const infoEl      = document.getElementById('filter-result-info');
+  const total       = allRecords.length;
+  const shown       = filtered.length;
+  const isFiltering = filterVal !== 'all' || keyword !== '';
+
+  if (infoEl) {
+    if (total === 0) {
+      infoEl.textContent = '';
+      infoEl.className   = 'filter-result-info';
+    } else if (isFiltering) {
+      infoEl.textContent = `${total}件中 ${shown}件 表示中`;
+      infoEl.className   = 'filter-result-info has-filter';
+    } else {
+      infoEl.textContent = `全 ${total} 件`;
+      infoEl.className   = 'filter-result-info';
+    }
+  }
+
+  // ④ 絞り込み結果を画面に描画
+  renderFilteredList(filtered, isFiltering);
+}
+
+/* ==================================================
+   絞り込み済みレコード配列を受け取って画面に描画する
+   （renderRecordList から切り出した描画処理）
+================================================== */
+function renderFilteredList(records, isFiltering) {
+  const container = document.getElementById('record-list-container');
+
+  // --- 0件の場合のメッセージ ---
+  if (records.length === 0) {
+    if (allRecords.length === 0) {
+      // Supabase にそもそもデータがない
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🐾</div>
+          <p>まだ記録がありません</p>
+          <p class="hint">「記録追加」タブから記録してみましょう！</p>
+        </div>`;
+    } else {
+      // フィルター・検索で絞り込んだ結果が0件
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🔍</div>
+          <p>条件に合う記録が見つかりません</p>
+          <p class="hint">絞り込み条件やキーワードを変えてみてください</p>
+        </div>`;
+    }
+    return;
+  }
+
+  // --- 記録カードを描画 ---
+  container.innerHTML = records.map(r => {
+
+    // うんちの表示テキストと CSS クラスを決める
+    let poopDisplay = '';
+    if (r.poop === 'なし') {
+      poopDisplay = 'なし';
+    } else if (r.poop === 'あり') {
+      if (r.poopCondition) {
+        let cls = '';
+        if (r.poopCondition.includes('良好'))        cls = 'poop-good';
+        else if (r.poopCondition.includes('軟便'))    cls = 'poop-soft';
+        else if (r.poopCondition.includes('コロコロ')) cls = 'poop-hard';
+        poopDisplay = `あり（<span class="${cls}">${escHtml(r.poopCondition)}</span>）`;
+      } else {
+        poopDisplay = 'あり';
+      }
+    }
+
+    const hasContent = r.weight || r.meal || r.vitality || r.poop
+                    || (r.symptoms && r.symptoms.length > 0)
+                    || r.photo || r.memo;
+
+    return `
+    <div class="record-item" id="rec-${r.id}">
+      <div class="record-header">
+        <div class="record-date">📅 ${formatDate(r.date)}</div>
+        <button class="btn btn-danger" onclick="deleteRecord('${r.id}')">🗑️ 削除</button>
+      </div>
+      <div class="record-fields">
+        ${r.vitality ? `
+          <div class="record-field">
+            <span class="record-field-label">😊 元気度</span>
+            <span class="record-field-value">${escHtml(r.vitality)}${r.vitalityTime ? `（${escHtml(r.vitalityTime)}）` : ''}</span>
+          </div>` : ''}
+        ${r.weight != null ? `
+          <div class="record-field">
+            <span class="record-field-label">⚖️ 体重</span>
+            <span class="record-field-value">${r.weight} kg</span>
+          </div>` : ''}
+        ${r.meal ? `
+          <div class="record-field">
+            <span class="record-field-label">🍽️ 食事</span>
+            <span class="record-field-value">${escHtml(r.meal)}</span>
+          </div>` : ''}
+        ${r.poop ? `
+          <div class="record-field">
+            <span class="record-field-label">💩 うんち</span>
+            <span class="record-field-value">${poopDisplay}</span>
+          </div>` : ''}
+        ${r.symptoms && r.symptoms.length > 0 ? `
+          <div class="record-field">
+            <span class="record-field-label">⚠️ 症状</span>
+            <span class="record-field-value">${r.symptoms.map(s => escHtml(s)).join('、')}</span>
+          </div>` : ''}
+        ${r.memo ? `
+          <div class="record-field">
+            <span class="record-field-label">📝 メモ</span>
+            <span class="record-field-value">${escHtml(r.memo)}</span>
+          </div>` : ''}
+        ${r.photo ? `<img src="${r.photo}" class="record-photo" alt="写真">` : ''}
+        ${!hasContent ? '<div style="color:#CCC;font-size:0.82rem">（内容なし）</div>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* 記録を削除する（Supabase から削除 → キャッシュを更新 → 再描画） */
+async function deleteRecord(recordId) {
+  if (!confirm('この記録を削除しますか？\n（削除したら元に戻せません）')) return;
+  try {
+    // Supabase から該当行を削除（id カラムで特定）
+    const { error } = await sb
+      .from(RECORDS_TABLE)
+      .delete()
+      .eq('id', recordId);
+
+    if (error) throw error;
+
+    // キャッシュからも削除して Supabase への再通信を避ける
+    allRecords = allRecords.filter(r => r.id !== recordId);
+
+    // 現在のフィルター条件のまま再描画（絞り込み状態を維持）
+    applyFilters();
+    await refreshStats();
+    showToast('🗑️ 削除しました');
+  } catch (err) {
+    console.error('削除エラー:', err);
+    showToast('❌ 削除に失敗しました');
+  }
+}
+
+/* ==================================================
+   タブ切り替え
+================================================== */
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  // 一覧タブに切り替えたとき Supabase からデータを再取得・描画
+  if (name === 'list') renderRecordList();
+}
+
+/* ==================================================
+   トースト通知（画面下部に一時的に表示するメッセージ）
+================================================== */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ==================================================
+   ユーティリティ関数
+================================================== */
+/* 日付を「2026年5月26日（月）」形式にフォーマット */
+function formatDate(str) {
+  const d    = new Date(str + 'T00:00:00');
+  const days = ['日','月','火','水','木','金','土'];
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+}
+
+/* 日付を「2026年5月26日」形式にフォーマット（曜日なし） */
+function formatDateSimple(str) {
+  const d = new Date(str + 'T00:00:00');
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+}
+
+/* XSS対策：HTML特殊文字をエスケープする（セキュリティのため必須） */
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ==================================================
+   初期化（ページ読み込み時に自動実行）
+================================================== */
+async function init() {
+  // 今日の日付を記録追加フォームのデフォルトにセット
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('record-date').value = today;
+  // Supabase からプロフィールを読み込む
+  await loadProfileFromSupabase();
+}
+
+init();
+</script>
+</body>
+</html>
