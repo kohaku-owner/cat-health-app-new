@@ -22,6 +22,7 @@
       text-align: center;
       padding: 20px 16px 16px;
       box-shadow: 0 3px 10px rgba(255,140,105,0.3);
+      position: relative; /* ログアウトボタンを右上に絶対配置するため */
     }
     header h1 { font-size: 1.6rem; margin-bottom: 4px; }
     #cat-name-display { font-size: 0.95rem; opacity: 0.92; }
@@ -452,10 +453,102 @@
 </head>
 <body>
 
+<!-- =====================================================
+     認証画面（ログイン前に全画面で表示される）
+     ログイン成功後は display:none になりメインアプリが現れる
+===================================================== -->
+<div id="auth-screen" style="display:none; position:fixed; inset:0;
+     background:#FFF8F2; z-index:200;
+     align-items:center; justify-content:center; padding:20px;">
+
+  <div style="background:white; border-radius:20px; padding:32px 28px;
+              max-width:360px; width:100%;
+              box-shadow:0 4px 24px rgba(255,140,105,0.18);">
+
+    <!-- タイトル -->
+    <div style="text-align:center; margin-bottom:24px;">
+      <div style="font-size:2.4rem; margin-bottom:8px;">🐱</div>
+      <h2 style="font-size:1.2rem; color:#FF8C69; font-weight:bold;">
+        猫の体調管理アプリ
+      </h2>
+    </div>
+
+    <!-- タブ：ログイン / 新規登録 切り替え -->
+    <div style="display:flex; border-bottom:2px solid #FFD9B8; margin-bottom:20px;">
+      <button id="auth-tab-login" onclick="switchAuthTab('login')"
+        style="flex:1; padding:10px; border:none; background:none; font-family:inherit;
+               font-weight:bold; color:#FF8C69; border-bottom:3px solid #FF8C69;
+               cursor:pointer; font-size:0.9rem;">
+        ログイン
+      </button>
+      <button id="auth-tab-signup" onclick="switchAuthTab('signup')"
+        style="flex:1; padding:10px; border:none; background:none; font-family:inherit;
+               color:#AAA; border-bottom:3px solid transparent;
+               cursor:pointer; font-size:0.9rem;">
+        新規登録
+      </button>
+    </div>
+
+    <!-- メールアドレス入力欄 -->
+    <div style="margin-bottom:16px;">
+      <label style="display:block; font-size:0.82rem; color:#777;
+                    font-weight:600; margin-bottom:8px;">
+        📧 メールアドレス
+      </label>
+      <input type="email" id="auth-email" placeholder="example@email.com"
+             style="width:100%; padding:10px 14px; border:2px solid #EEE;
+                    border-radius:10px; font-size:0.95rem; font-family:inherit;
+                    outline:none; background:#FAFAFA;">
+    </div>
+
+    <!-- パスワード入力欄 -->
+    <div style="margin-bottom:20px;">
+      <label style="display:block; font-size:0.82rem; color:#777;
+                    font-weight:600; margin-bottom:8px;">
+        🔑 パスワード（6文字以上）
+      </label>
+      <input type="password" id="auth-password" placeholder="••••••••"
+             style="width:100%; padding:10px 14px; border:2px solid #EEE;
+                    border-radius:10px; font-size:0.95rem; font-family:inherit;
+                    outline:none; background:#FAFAFA;">
+    </div>
+
+    <!-- 送信ボタン（ログイン / 新規登録で文言が変わる） -->
+    <button id="auth-submit-btn" onclick="handleAuthSubmit()"
+      style="width:100%; padding:14px; border:none; border-radius:10px;
+             cursor:pointer; font-size:1rem; font-weight:bold; font-family:inherit;
+             background:linear-gradient(135deg,#FF8C69,#FFB347); color:white;
+             box-shadow:0 3px 10px rgba(255,140,105,0.3);">
+      🔑 ログイン
+    </button>
+
+    <!-- エラー・案内メッセージ表示欄 -->
+    <div id="auth-error"
+         style="margin-top:12px; font-size:0.82rem; text-align:center;
+                min-height:1.4em; color:#E05555; line-height:1.5;">
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================
+     メインアプリ（ログイン後にのみ表示される）
+     認証前は display:none で完全に非表示
+===================================================== -->
+<div id="main-app" style="display:none">
+
 <!-- ===== ヘッダー ===== -->
 <header>
   <h1>🐱 猫の体調管理</h1>
   <div id="cat-name-display">プロフィールを設定してください</div>
+  <!-- ログアウトボタン（右上に絶対配置） -->
+  <button onclick="signOut()"
+    style="position:absolute; top:14px; right:14px;
+           padding:6px 14px; background:rgba(255,255,255,0.22);
+           border:1.5px solid rgba(255,255,255,0.55); border-radius:20px;
+           color:white; font-size:0.72rem; font-family:inherit;
+           cursor:pointer; font-weight:600; letter-spacing:0.04em;">
+    ログアウト
+  </button>
 </header>
 
 <!-- ===== タブナビ ===== -->
@@ -711,6 +804,7 @@
 <!-- ===== トースト通知 ===== -->
 <div class="toast" id="toast"></div>
 
+</div><!-- /#main-app ここまでがログイン後に表示されるメインコンテンツ -->
 
 <script>
 /* ==================================================
@@ -740,9 +834,10 @@ const RECORDS_TABLE = 'cat_health_logs'; // 日々の記録保存先テーブル
    Supabase DB → スネークケース（例: vitality_time）
    保存・取得のたびにこの関数で変換する
 ================================================== */
-/* JS オブジェクト → DB 行 形式に変換（INSERT 時に使用） */
-function toDbRow(r) {
-  const row = { date: r.date };
+/* JS オブジェクト → DB 行 形式に変換（INSERT 時に使用）
+   userId: 現在ログイン中のユーザーID（RLS で必須のカラム） */
+function toDbRow(r, userId) {
+  const row = { date: r.date, user_id: userId }; // user_id を必ず含める
   if (r.weight != null)        row.weight         = r.weight;
   if (r.meal)                  row.meal           = r.meal;
   if (r.vitality)              row.vitality       = r.vitality;
@@ -783,10 +878,13 @@ async function saveProfile() {
   if (!name) { showToast('❌ 猫の名前を入力してください'); return; }
 
   try {
-    // upsert = id='main' があれば UPDATE、なければ INSERT
+    // 現在のログインユーザーIDを取得する
+    const { data: { user } } = await sb.auth.getUser();
+
+    // upsert = ユーザーIDで既にプロフィールがあれば UPDATE、なければ INSERT
     const { error } = await sb
       .from(PROFILE_TABLE)
-      .upsert({ id: 'main', name, birthday: birthday || null }, { onConflict: 'id' });
+      .upsert({ id: user.id, user_id: user.id, name, birthday: birthday || null }, { onConflict: 'id' });
 
     if (error) throw error;
 
@@ -852,10 +950,13 @@ async function loadProfileFromSupabase() {
 
   // ② Supabase から最新データを取得して画面を更新
   try {
+    // 現在のログインユーザーIDを取得する
+    const { data: { user } } = await sb.auth.getUser();
+
     const { data, error } = await sb
       .from(PROFILE_TABLE)
       .select('*')
-      .eq('id', 'main')
+      .eq('id', user.id) // 'main' の固定値 → ログイン中ユーザーのIDに変更
       .maybeSingle(); // 0件でもエラーにしない
 
     if (error) throw error;
@@ -1055,9 +1156,12 @@ async function saveRecord() {
   // created_at は Supabase が DB 側で自動的に現在時刻を入れる（SQL の DEFAULT NOW()）
 
   try {
+    // 現在のログインユーザーIDを取得する（user_id カラムに入れるため）
+    const { data: { user } } = await sb.auth.getUser();
+
     showToast('⏳ 保存中...');
-    // toDbRow() でフィールド名をスネークケースに変換して INSERT
-    const { error } = await sb.from(RECORDS_TABLE).insert(toDbRow(record));
+    // toDbRow() でフィールド名をスネークケースに変換して INSERT（user_id も含める）
+    const { error } = await sb.from(RECORDS_TABLE).insert(toDbRow(record, user.id));
     if (error) throw error;
 
     resetForm();
@@ -1383,7 +1487,140 @@ function escHtml(str) {
 }
 
 /* ==================================================
-   初期化（ページ読み込み時に自動実行）
+   認証タブの切り替え（ログイン ↔ 新規登録）
+================================================== */
+let authMode = 'login'; // 現在のモード（'login' または 'signup'）
+
+function switchAuthTab(mode) {
+  authMode = mode;
+
+  const loginTab  = document.getElementById('auth-tab-login');
+  const signupTab = document.getElementById('auth-tab-signup');
+  const btn       = document.getElementById('auth-submit-btn');
+  const errEl     = document.getElementById('auth-error');
+
+  if (mode === 'login') {
+    loginTab.style.color        = '#FF8C69';
+    loginTab.style.borderBottom = '3px solid #FF8C69';
+    loginTab.style.fontWeight   = 'bold';
+    signupTab.style.color        = '#AAA';
+    signupTab.style.borderBottom = '3px solid transparent';
+    signupTab.style.fontWeight   = 'normal';
+    btn.textContent = '🔑 ログイン';
+  } else {
+    signupTab.style.color        = '#FF8C69';
+    signupTab.style.borderBottom = '3px solid #FF8C69';
+    signupTab.style.fontWeight   = 'bold';
+    loginTab.style.color        = '#AAA';
+    loginTab.style.borderBottom = '3px solid transparent';
+    loginTab.style.fontWeight   = 'normal';
+    btn.textContent = '📝 新規登録する';
+  }
+  // エラーメッセージをクリア
+  errEl.textContent = '';
+}
+
+/* ==================================================
+   ログイン / 新規登録ボタンが押されたときの処理
+================================================== */
+async function handleAuthSubmit() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl    = document.getElementById('auth-error');
+  const btn      = document.getElementById('auth-submit-btn');
+
+  // 未入力チェック
+  if (!email || !password) {
+    errEl.style.color = '#E05555';
+    errEl.textContent = 'メールアドレスとパスワードを入力してください';
+    return;
+  }
+
+  // ボタンをローディング状態にして二重送信を防ぐ
+  btn.disabled    = true;
+  btn.textContent = '⏳ 処理中...';
+  errEl.textContent = '';
+
+  try {
+    if (authMode === 'login') {
+      /* ===== ログイン処理 ===== */
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      // 成功 → onAuthStateChange が自動でアプリを表示する
+
+    } else {
+      /* ===== 新規登録処理 ===== */
+      const { error } = await sb.auth.signUp({ email, password });
+      if (error) throw error;
+
+      // 確認メールが送信された旨を表示（メール確認後にログイン可能）
+      errEl.style.color = '#22A066';
+      errEl.textContent = '✅ 確認メールを送信しました。メール内のリンクをクリックしてからログインしてください';
+      btn.disabled    = false;
+      btn.textContent = '📝 新規登録する';
+    }
+
+  } catch (err) {
+    // エラーを日本語に変換して表示
+    errEl.style.color = '#E05555';
+    errEl.textContent = getAuthErrorMessage(err.message);
+    btn.disabled    = false;
+    btn.textContent = authMode === 'login' ? '🔑 ログイン' : '📝 新規登録する';
+  }
+}
+
+/* Supabase のエラーメッセージを日本語に変換する */
+function getAuthErrorMessage(msg) {
+  if (!msg) return '❌ エラーが発生しました';
+  if (msg.includes('Invalid login credentials'))   return '❌ メールアドレスまたはパスワードが違います';
+  if (msg.includes('Email not confirmed'))         return '❌ メール確認が未完了です。受信ボックスを確認してください';
+  if (msg.includes('User already registered'))     return '❌ このメールアドレスはすでに登録済みです';
+  if (msg.includes('Password should be at least')) return '❌ パスワードは6文字以上にしてください';
+  if (msg.includes('Unable to validate email'))    return '❌ メールアドレスの形式が正しくありません';
+  return `❌ ${msg}`;
+}
+
+/* ==================================================
+   ログアウト処理
+================================================== */
+async function signOut() {
+  if (!confirm('ログアウトしますか？')) return;
+  // ローカルキャッシュを削除（別ユーザーがログインしたときに混在しないよう）
+  localStorage.removeItem('catProfile_cache');
+  await sb.auth.signOut();
+  // onAuthStateChange が自動でログイン画面を表示する
+}
+
+/* ==================================================
+   認証状態の監視（ページ読み込み時に自動で実行される）
+   ・セッションあり（ログイン済み）→ メインアプリを表示・初期化
+   ・セッションなし（未ログイン）  → ログイン画面を表示
+================================================== */
+sb.auth.onAuthStateChange((event, session) => {
+  const authScreen = document.getElementById('auth-screen');
+  const mainApp    = document.getElementById('main-app');
+
+  if (session) {
+    /* ログイン済み：ログイン画面を隠してアプリを表示 */
+    authScreen.style.display = 'none';
+    mainApp.style.display    = 'block';
+    init(); // プロフィール読み込み・日付セットなどの初期化
+
+  } else {
+    /* 未ログイン / ログアウト：アプリを隠してログイン画面を表示 */
+    authScreen.style.display = 'flex';
+    mainApp.style.display    = 'none';
+    // UI をリセット（別ユーザーが使うときにデータが残らないよう）
+    updateHeader('');
+    document.getElementById('profile-result').style.display = 'none';
+    document.getElementById('stats-card').style.display     = 'none';
+    document.getElementById('record-list-container').innerHTML = '';
+    allRecords = [];
+  }
+});
+
+/* ==================================================
+   初期化（onAuthStateChange からログイン確認後に呼ばれる）
 ================================================== */
 async function init() {
   // 今日の日付を記録追加フォームのデフォルトにセット
@@ -1392,8 +1629,7 @@ async function init() {
   // Supabase からプロフィールを読み込む
   await loadProfileFromSupabase();
 }
-
-init();
+/* ※ init() の直接呼び出しは削除 → onAuthStateChange が代わりに呼ぶ */
 </script>
 </body>
 </html>
