@@ -443,6 +443,88 @@
       color: #FF8C69;
       font-weight: 600;
     }
+
+    /* ========== 日付範囲フィルター行 ========== */
+    .date-filter-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-top: 4px;
+    }
+    .date-filter-label {
+      font-size: 0.78rem;
+      color: #AAA;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    /* 日付入力欄 */
+    .date-input {
+      flex: 1;
+      min-width: 130px;
+      padding: 8px 10px;
+      border: 2px solid #EEE;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-family: inherit;
+      color: #555;
+      background: #FAFAFA;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .date-input:focus {
+      border-color: #FFB347;
+      box-shadow: 0 0 0 3px rgba(255,179,71,0.15);
+    }
+    /* 「〜」区切り文字 */
+    .date-separator {
+      color: #CCC;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    /* 日付クリアボタン（×） */
+    .btn-date-clear {
+      padding: 7px 11px;
+      border: 1.5px solid #E8E8E8;
+      border-radius: 8px;
+      background: #F8F8F8;
+      color: #BBB;
+      font-size: 0.8rem;
+      font-family: inherit;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .btn-date-clear:hover { border-color: #E05555; background: #FFF0F0; color: #E05555; }
+
+    /* ========== 日付ショートカットボタン行 ========== */
+    .date-shortcut-row {
+      width: 100%;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    /* ショートカット各ボタン（ピル型） */
+    .shortcut-btn {
+      padding: 5px 13px;
+      border: 1.5px solid #E8E8E8;
+      border-radius: 20px;
+      background: #F8F8F8;
+      color: #999;
+      font-size: 0.75rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .shortcut-btn:hover { border-color: #FFB347; background: #FFF8F2; color: #FF8C69; }
+    /* 現在選択中のショートカット */
+    .shortcut-btn.active {
+      border-color: #FF8C69;
+      background: linear-gradient(135deg, #FFF0EB, #FFF6F0);
+      color: #E05E30;
+      font-weight: 700;
+    }
   </style>
 
   <!-- ========== Supabase SDK（CDN経由で読み込む） ==========
@@ -790,6 +872,33 @@
         oninput="applyFilters()"
         autocomplete="off"
       >
+    </div>
+
+    <!-- ③ 日付範囲フィルター（開始日〜終了日） -->
+    <div class="date-filter-row">
+      <span class="date-filter-label">📅 期間</span>
+      <input type="date" id="filter-date-from" class="date-input"
+             onchange="applyFilters()" title="開始日">
+      <span class="date-separator">〜</span>
+      <input type="date" id="filter-date-to"   class="date-input"
+             onchange="applyFilters()" title="終了日">
+      <!-- 日付入力があるときだけ表示されるクリアボタン -->
+      <button class="btn-date-clear" id="date-clear-btn"
+              onclick="clearDateFilter()" style="display:none" title="日付フィルターをリセット">
+        ✕
+      </button>
+    </div>
+
+    <!-- ④ 期間ショートカットボタン（タップ一発で日付をセット） -->
+    <div class="date-shortcut-row">
+      <button class="shortcut-btn" data-shortcut="7days"
+              onclick="setDateShortcut('7days')">過去7日</button>
+      <button class="shortcut-btn" data-shortcut="thisMonth"
+              onclick="setDateShortcut('thisMonth')">今月</button>
+      <button class="shortcut-btn" data-shortcut="lastMonth"
+              onclick="setDateShortcut('lastMonth')">先月</button>
+      <button class="shortcut-btn" data-shortcut="all"
+              onclick="setDateShortcut('all')">全期間</button>
     </div>
 
     <!-- 絞り込み結果の件数（「10件中 3件 表示中」など） -->
@@ -1246,9 +1355,11 @@ async function renderRecordList() {
    の両方を掛け合わせて絞り込む
 ================================================== */
 function applyFilters() {
-  // 現在のフィルター値とキーワードを取得
+  // 現在のフィルター値・キーワード・日付範囲を取得
   const filterVal = document.getElementById('filter-select')?.value  || 'all';
   const keyword   = (document.getElementById('search-input')?.value  || '').trim().toLowerCase();
+  const dateFrom  = document.getElementById('filter-date-from')?.value || ''; // 開始日（YYYY-MM-DD）
+  const dateTo    = document.getElementById('filter-date-to')?.value   || ''; // 終了日（YYYY-MM-DD）
 
   // キャッシュ全件から絞り込みをスタート
   let filtered = allRecords;
@@ -1295,11 +1406,28 @@ function applyFilters() {
     });
   }
 
-  // ③ 件数インジケーターを更新
+  // ③ 日付範囲フィルターを適用
+  // 日付は「YYYY-MM-DD」形式で保存されているため文字列の辞書順比較が使える
+  // 例：「2026-05-01」>= 「2026-04-01」→ true（日付の大小と一致する）
+  if (dateFrom) {
+    filtered = filtered.filter(r => r.date >= dateFrom); // 開始日以降のみ残す
+  }
+  if (dateTo) {
+    filtered = filtered.filter(r => r.date <= dateTo);   // 終了日以前のみ残す
+  }
+
+  // 日付クリアボタンの表示切り替え（どちらか入力されていたら表示）
+  const dateClearBtn = document.getElementById('date-clear-btn');
+  if (dateClearBtn) {
+    dateClearBtn.style.display = (dateFrom || dateTo) ? 'inline-block' : 'none';
+  }
+
+  // ④ 件数インジケーターを更新
   const infoEl      = document.getElementById('filter-result-info');
   const total       = allRecords.length;
   const shown       = filtered.length;
-  const isFiltering = filterVal !== 'all' || keyword !== '';
+  // いずれかの条件が入っていれば「絞り込み中」とみなす
+  const isFiltering = filterVal !== 'all' || keyword !== '' || dateFrom !== '' || dateTo !== '';
 
   if (infoEl) {
     if (total === 0) {
@@ -1314,8 +1442,69 @@ function applyFilters() {
     }
   }
 
-  // ④ 絞り込み結果を画面に描画
+  // ⑤ 絞り込み結果を画面に描画
   renderFilteredList(filtered, isFiltering);
+}
+
+/* ==================================================
+   日付フィルターのクリア
+   開始日・終了日を両方リセットして全件表示に戻す
+================================================== */
+function clearDateFilter() {
+  document.getElementById('filter-date-from').value = '';
+  document.getElementById('filter-date-to').value   = '';
+  document.getElementById('date-clear-btn').style.display = 'none';
+  // ショートカットボタンのアクティブ状態もリセット
+  document.querySelectorAll('.shortcut-btn').forEach(b => b.classList.remove('active'));
+  applyFilters();
+}
+
+/* ==================================================
+   日付ショートカットボタンの処理
+   「過去7日」「今月」「先月」「全期間」を選ぶと
+   開始日・終了日が自動でセットされて絞り込みが実行される
+================================================== */
+function setDateShortcut(type) {
+  const today = new Date();
+  let from = '', to = '';
+
+  if (type === '7days') {
+    // 今日から6日前〜今日（合計7日間）
+    const d = new Date(today);
+    d.setDate(d.getDate() - 6);
+    from = d.toISOString().split('T')[0];
+    to   = today.toISOString().split('T')[0];
+
+  } else if (type === 'thisMonth') {
+    // 今月1日〜今日
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    from = `${y}-${m}-01`;
+    to   = today.toISOString().split('T')[0];
+
+  } else if (type === 'lastMonth') {
+    // 先月1日〜先月末日
+    // new Date(年, 月, 0) は「指定した月の0日目 = 前月の末日」になる
+    const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastDay  = new Date(today.getFullYear(), today.getMonth(),     0);
+    from = firstDay.toISOString().split('T')[0];
+    to   = lastDay.toISOString().split('T')[0];
+
+  } else if (type === 'all') {
+    // 全期間（日付フィルターなし）
+    from = '';
+    to   = '';
+  }
+
+  document.getElementById('filter-date-from').value = from;
+  document.getElementById('filter-date-to').value   = to;
+
+  // 押したボタンだけアクティブ（ハイライト）にする
+  document.querySelectorAll('.shortcut-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.shortcut === type);
+  });
+
+  applyFilters();
 }
 
 /* ==================================================
